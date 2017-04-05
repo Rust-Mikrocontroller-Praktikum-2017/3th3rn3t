@@ -4,51 +4,49 @@ use core::ptr;
 
 #[feature(inclusive_range_syntax)]
 
+pub struct ColorSquare {
+    x: u16,
+    y: u16,
+    len: u16,
+    color: u16
+}
+
+impl ColorSquare {
+    pub const fn new(x: u16, y: u16, len: u16, color: u16) -> Self {
+        ColorSquare{x, y, len, color}
+    }
+
+    pub fn touched_inside(&self, x: u16, y: u16) -> bool {
+        self.x <= x && x <= (self.x + self.len) && self.y <= y && y <= (self.y + self.len)
+    }
+
+    pub fn draw(&self, lcd: &mut Lcd) {
+        draw_square_filled(self.x, self.y, self.len, self.color, lcd);
+    }
+
+    pub fn get_color(&self) -> u16 {
+        self.color
+    }
+}
+
+
 pub fn draw_square(x: u16, y: u16, len: u16, color: u16, lcd: &mut Lcd) {
 
-    let addr: u32 = 0xC000_0000 + ( 480 * 272 * 2);
-
-    // let x = x as u32;
-    // let y = y as u32;
-    // let len = len as u32;
-
-    // for i in x..(len+x) {
-    //     for j in y..(len+y) {
-    //         let mut pixel = j * 480 + i;
-    //         let mut pixel_pos = (addr + pixel * 2) as *mut u16;
-    //         unsafe { ptr::write_volatile(pixel_pos, color ) };
-    //     }
-    // }
     for i in x..(x+len) {
-//        let mut pixel = y * 480 + i;
-//        let mut pixel_pos = (addr + pixel * 2) as *mut u16;
-//        unsafe { ptr::write_volatile(pixel_pos, color ) };
-//
-//        pixel =  y * 480 + i + len - 1;
-//        let mut pixel_pos = (addr + pixel * 2) as *mut u16;
-//        unsafe { ptr::write_volatile(pixel_pos, color ) };
-//
         lcd.print_point_color_at(i, y, color);
-        // system_clock::wait(1);
         lcd.print_point_color_at(i, y + len - 1, color);
     }
 
-
-    // let pixel = i * 480 + j;
-    // let pixel_color = (addr + pixel * 2) as *mut u16;
-    // unsafe { ptr::write_volatile(pixel_color, colors[(i / 10) as usize & 7]) };
-
-    // let pixel = i * 480 + j;
-    // let pixel_color = (addr + pixel * 2) as *mut u16;
-    // unsafe { ptr::write_volatile(pixel_color, colors[(i / 10) as usize & 7]) };
-
-
     for i in y..(y+len) {
             lcd.print_point_color_at(x, i, color);
-        //
-        //     // system_clock::wait(1);
             lcd.print_point_color_at(x + len - 1, i, color);
     }
-
 }
 
+pub fn draw_square_filled(x: u16, y: u16, len: u16, color: u16, lcd: &mut Lcd) {
+    for i in x..(x+len) {
+        for j in y..(y+len) {
+            lcd.print_point_color_at(i, j, color);
+        }
+    }
+}
