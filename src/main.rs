@@ -123,6 +123,7 @@ fn main(hw: board::Hardware) -> ! {
     let mut rng = rng::enable().expect("rng already enabled");
     let mut last_toggle_ticks = system_clock::ticks();
 
+    println!("entering main loop");
     loop {
 
         let ticks = system_clock::ticks();

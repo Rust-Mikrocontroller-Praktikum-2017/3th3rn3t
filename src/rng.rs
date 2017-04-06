@@ -7,6 +7,11 @@ const RNG_CR: u32 = RNG_BASE_ADDR + 0x0;
 const RNG_STATUS: u32 = RNG_BASE_ADDR + 0x4;
 const RNG_DATA: u32 = RNG_BASE_ADDR + 0x8;
 
+
+const RCC_BASE_ADDR: u32 = 0x4002_3800;
+const RCC_AHB2RSTR: u32 = RCC_BASE_ADDR + 0x14;
+const RCC_AHB2ENR: u32 = RCC_BASE_ADDR + 0x34;
+
 pub struct Rng(u32, u32);
 
 #[derive(Debug)]
@@ -28,14 +33,23 @@ fn disable_cr () {
 
 fn enable_cr () {
 
-    let mut bits = 0;
-    bits.set_bit(2, true);
+    let mut bits_rcc_en = 0;
+    bits_rcc_en.set_bit(6, true);
 
-    unsafe { ptr::write_volatile(RNG_CR as *mut u32, bits) };
+    let mut bits_rng_cr = 0;
+    bits_rng_cr.set_bit(2, true);
+
+    let mut bits_rcc_ahb2rstr = 0;
+    bits_rcc_ahb2rstr.set_bit(6, true);
+
+    unsafe { ptr::write_volatile(RCC_AHB2RSTR as *mut u32, bits_rcc_ahb2rstr)};
+    unsafe { ptr::write_volatile(RCC_AHB2ENR as *mut u32, bits_rcc_en)};
+    unsafe { ptr::write_volatile(RNG_CR as *mut u32, bits_rng_cr)};
 }
 
 pub fn enable() -> Result<Rng, ErrorType> {
 
+    unsafe { ptr::write_volatile(RNG_DATA as *mut u32, 0) };
     let reg_content = unsafe { ptr::read_volatile(RNG_CR as *mut u32) };
     if reg_content.get_bit(2) {
         return Err(ErrorType::AlreadyEnabled);
@@ -52,6 +66,14 @@ impl Rng {
     pub fn poll_and_get(&mut self) -> Result<u32, ErrorType> {
 
         let status = unsafe { ptr::read_volatile(RNG_STATUS as *mut u32) };
+
+        if status.get_bit(5) || status.get_bit(6) {
+            // println!("Resetting clock, CEIS or SEIS was set");
+            disable_cr();
+            enable_cr();
+            println!("this called");
+            return Err(ErrorType::NotReady);
+        }
 
         if !status.get_bit(1) {
             if !status.get_bit(2) {
@@ -73,8 +95,8 @@ impl Rng {
         }
 
         self.1 += 1;
-        if self.1 > 40 {
-            println!("RNG reset");
+        if self.1 > 80 {
+            // println!("RNG reset");
             disable_cr();
             enable_cr();
             self.1 = 0;
