@@ -1,3 +1,6 @@
+# no more 'type <return> to continue ...'
+set pagination off
+
 define reset
     # reset board by setting the SYSRESETREQ bit it the AIRCR register
     # see http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0552a/Cihehdge.html
