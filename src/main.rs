@@ -4,22 +4,19 @@
 #![feature(asm)]
 #![feature(const_fn)]
 
-#![macro_use]
 extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
 extern crate bit_field;
 
 use stm32f7::{system_clock, board, embedded, touch, i2c, lcd};
 
+#[macro_use]
+mod semi_hosting;
 mod font;
 mod graphics;
 mod rng;
-mod semi_hosting;
 
 use rng::{Rng,ErrorType};
-use bit_field::BitField;
-
-use graphics::*;
 
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
@@ -117,20 +114,19 @@ fn main(hw: board::Hardware) -> ! {
     let mut i2c_3 = i2c::init(i2c_3);
     touch::check_family_id(&mut i2c_3).unwrap();
 
-    let mut rng = rng::enable().expect("rng already enabled");
-
     let mut led = gpio.to_output(led_pin,
                                  gpio::OutputType::PushPull,
                                  gpio::OutputSpeed::Low,
                                  gpio::Resistor::NoPull,)
         .expect("led pin already in use");
 
+    let mut rng = rng::enable().expect("rng already enabled");
     let mut last_toggle_ticks = system_clock::ticks();
 
     loop {
 
         let ticks = system_clock::ticks();
-        if (system_clock::ticks() - last_toggle_ticks)  > 1500 {
+        if (ticks - last_toggle_ticks)  > 1500 {
             let current_led_state = led.get();
             led.set(!current_led_state);
             last_toggle_ticks = ticks;
