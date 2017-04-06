@@ -29,7 +29,7 @@ impl ColorSquare {
     }
 }
 
-pub fn tick() {
+pub fn tick(lcd: &mut Lcd) {
 
 
 }

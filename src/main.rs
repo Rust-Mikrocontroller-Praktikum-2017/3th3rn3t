@@ -117,7 +117,7 @@ fn main(hw: board::Hardware) -> ! {
     let mut i2c_3 = i2c::init(i2c_3);
     touch::check_family_id(&mut i2c_3).unwrap();
 
-    let mut rng = rng::enable();
+    let mut rng = rng::enable().expect("rng already enabled");
 
     let mut led = gpio.to_output(led_pin,
                                  gpio::OutputType::PushPull,
@@ -136,7 +136,7 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        graphics::tick();
-        rng::tick();
+        graphics::tick(&mut lcd);
+        rng::tick(&mut rng);
     }
 }

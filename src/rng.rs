@@ -50,7 +50,7 @@ pub fn enable() -> Result<Rng, ErrorType> {
     Ok(rng)
 }
 
-pub fn tick() {
+pub fn tick(rng: &mut Rng) {
 
 
 }
