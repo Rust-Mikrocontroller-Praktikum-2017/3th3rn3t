@@ -7,6 +7,8 @@ extern crate r0;
 
 use stm32f7::{system_clock, board, embedded};
 
+mod font;
+
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
 
