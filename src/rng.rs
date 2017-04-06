@@ -7,26 +7,32 @@ const rng_cr: u32 = rng_base_addr + 0x0;
 const rng_status: u32 = rng_base_addr + 0x4;
 const rng_data: u32 = rng_base_addr + 0x8;
 
-pub struct Rng(u32);
+pub struct Rng(u32, u32);
 
 #[derive(Debug)]
 pub enum ErrorType {
-    CEIS,
-    SEIS,
+    CECS,
+    SECS,
     AlreadyEnabled
 }
 
+fn disable_cr () {
+
+    let mut bits = unsafe { ptr::read_volatile(rng_cr as *mut u32) };
+    bits.set_bit(2, false);
+    bits.set_bit(3, false);
+
+    unsafe { ptr::write_volatile(rng_cr as *mut u32, bits) };
+}
 
 fn enable_cr () {
 
-
     // clear SEIS bit
+    // let mut data = unsafe { ptr::read_volatile(rng_status as *mut u32) };
+    // let mut d = data.clone();
+    // d.set_bit(6, false);
 
-    let mut data = unsafe { ptr::read_volatile(rng_status as *mut u32) };
-    let mut d = data.clone();
-    d.set_bit(6, false);
-
-    unsafe { ptr::write_volatile(rng_status as *mut u32, d)};
+    // unsafe { ptr::write_volatile(rng_status as *mut u32, d)};
 
     let mut bits = unsafe { ptr::read_volatile(rng_cr as *mut u32) };
     bits.set_bit(2, true);
@@ -35,6 +41,10 @@ fn enable_cr () {
     unsafe { ptr::write_volatile(rng_cr as *mut u32, bits) };
 }
 
+pub fn tick(rng: &mut Rng) {
+
+
+}
 
 pub fn enable() -> Result<Rng, ErrorType> {
 
@@ -43,16 +53,11 @@ pub fn enable() -> Result<Rng, ErrorType> {
         return Err(ErrorType::AlreadyEnabled);
     }
 
-    let rng = Rng(0x0);
+    let rng = Rng(0x0, 0x0);
 
     enable_cr();
 
     Ok(rng)
-}
-
-pub fn tick(rng: &mut Rng) {
-
-
 }
 
 impl Rng {
@@ -60,8 +65,8 @@ impl Rng {
 
         let content = unsafe { ptr::read_volatile(rng_status as *mut u32) };
 
-        if !content.get_bit(5) {
-            if !content.get_bit(6) {
+        if !content.get_bit(1) {
+            if !content.get_bit(2) {
                 if content.get_bit(0) {
                     let data = unsafe { ptr::read_volatile(rng_data as *mut u32) };
                     if data != self.0 {
@@ -71,10 +76,17 @@ impl Rng {
                 }
             } else {
                 enable_cr(); // recommended by manual
-                return Err(ErrorType::SEIS);
+                return Err(ErrorType::SECS);
             }
         } else {
-            return Err(ErrorType::CEIS);
+            return Err(ErrorType::CECS);
+        }
+
+        self.1 += 1;
+        if self.1 > 10 {
+            disable_cr();
+            enable_cr();
+            self.1 = 0;
         }
 
         // data was not ready, try again!
