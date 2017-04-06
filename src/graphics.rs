@@ -29,6 +29,10 @@ impl ColorSquare {
     }
 }
 
+pub fn tick() {
+
+
+}
 
 pub fn draw_square(x: u16, y: u16, len: u16, color: u16, lcd: &mut Lcd) {
 

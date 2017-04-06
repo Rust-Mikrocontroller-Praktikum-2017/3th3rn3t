@@ -1,13 +1,25 @@
 #![no_std]
 #![no_main]
 
+#![feature(asm)]
+#![feature(const_fn)]
+
 #![macro_use]
 extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
+extern crate bit_field;
 
-use stm32f7::{system_clock, board, embedded};
+use stm32f7::{system_clock, board, embedded, touch, i2c, lcd};
 
 mod font;
+mod graphics;
+mod rng;
+mod semi_hosting;
+
+use rng::{Rng,ErrorType};
+use bit_field::BitField;
+
+use graphics::*;
 
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
@@ -99,6 +111,14 @@ fn main(hw: board::Hardware) -> ! {
 
     let led_pin = (gpio::Port::PortI, gpio::Pin::Pin1);
 
+    let mut lcd = lcd::init(ltdc, rcc, &mut gpio);
+
+    i2c::init_pins_and_clocks(rcc, &mut gpio);
+    let mut i2c_3 = i2c::init(i2c_3);
+    touch::check_family_id(&mut i2c_3).unwrap();
+
+    let mut rng = rng::enable();
+
     let mut led = gpio.to_output(led_pin,
                                  gpio::OutputType::PushPull,
                                  gpio::OutputSpeed::Low,
@@ -116,5 +136,7 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
+        graphics::tick();
+        rng::tick();
     }
 }

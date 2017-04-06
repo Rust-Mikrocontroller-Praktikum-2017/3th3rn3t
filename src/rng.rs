@@ -50,6 +50,11 @@ pub fn enable() -> Result<Rng, ErrorType> {
     Ok(rng)
 }
 
+pub fn tick() {
+
+
+}
+
 impl Rng {
     pub fn poll_and_get(&mut self) -> Result<Option<u32>, ErrorType> {
 
