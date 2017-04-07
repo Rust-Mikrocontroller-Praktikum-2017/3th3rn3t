@@ -25,8 +25,8 @@ impl ColorSquare {
         self.x <= x && x <= (self.x + self.len) && self.y <= y && y <= (self.y + self.len)
     }
 
-    pub fn draw(&self, graphics: &Graphics) {
-        graphics.draw_square_filled(self.x, self.y, self.len, self.color);
+    pub fn draw(&self, lcd: &mut Lcd) {
+        Graphics::draw_square_filled(lcd, self.x, self.y, self.len, self.color);
     }
 
     pub fn get_color(&self) -> u16 {
@@ -34,29 +34,26 @@ impl ColorSquare {
     }
 }
 
-// TODO: ohne mut, oder unsafe Cell (interior mutability)
 pub struct Graphics {
     lcd: Lcd,
-    i2c_3: I2C,
     color_buttons: Vec<ColorSquare>,
     touch_color: u16
 }
 
 impl Graphics {
-    // TODO: this explicit indication of i2c's type is strange
-    pub fn init(ltdc: &'static mut Ltdc, rcc: &mut Rcc, gpio: &mut Gpio, i2c: &'static mut stm32f7::board::i2c::I2c) -> Self {
-        i2c::init_pins_and_clocks(rcc, &mut gpio);
+    // TODO: this mut before gpio is strange
+    pub fn init(ltdc: &'static mut Ltdc, rcc: &mut Rcc, mut gpio: &mut Gpio, i2c_3: &mut I2C) -> Self {
         let mut graphics = Graphics {
             lcd: lcd::init(ltdc, rcc, &mut gpio),
-            i2c_3: i2c::init(i2c),
             color_buttons: Vec::new(),
             touch_color: 0xffff
         };
-        touch::check_family_id(&mut graphics.i2c_3).unwrap();
+        touch::check_family_id(i2c_3).unwrap();
         graphics
     }
 
-    pub fn prepare(&self) {
+    pub fn prepare(&mut self) {
+        self.lcd.clear_screen();
         self.color_buttons = vec![
             ColorSquare::new(10, 10, 50, 0xffff),
             ColorSquare::new(10, 70, 50, 0xff00),
@@ -64,15 +61,15 @@ impl Graphics {
             ColorSquare::new(10, 190, 50, 0xccaa)];
 
         for color_button in self.color_buttons.iter() {
-            color_button.draw(&self);
+            color_button.draw(&mut self.lcd);
         }
 
         self.touch_color = self.color_buttons[0].get_color();
     }
 
-    pub fn tick(&self) {
+    pub fn tick(&mut self, i2c_3: &mut I2C) {
 
-        for touch in &touch::touches(&mut self.i2c_3).unwrap() {
+        for touch in &touch::touches(i2c_3).unwrap() {
             let mut color_changed = false;
 
             // check if one of the color buttons was touched
@@ -90,7 +87,7 @@ impl Graphics {
         }
     }
 
-    pub fn draw_square(&self, x: u16, y: u16, len: u16, color: u16) {
+    pub fn draw_square(&mut self, x: u16, y: u16, len: u16, color: u16) {
 
         for i in x..(x+len) {
             self.lcd.print_point_color_at(i, y, color);
@@ -103,10 +100,10 @@ impl Graphics {
         }
     }
 
-    pub fn draw_square_filled(&self, x: u16, y: u16, len: u16, color: u16) {
+    pub fn draw_square_filled(lcd: &mut Lcd, x: u16, y: u16, len: u16, color: u16) {
         for i in x..(x+len) {
             for j in y..(y+len) {
-                self.lcd.print_point_color_at(i, j, color);
+                lcd.print_point_color_at(i, j, color);
             }
         }
     }

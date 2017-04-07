@@ -20,6 +20,7 @@ mod graphics;
 mod rng;
 
 use rng::{Rng,ErrorType};
+use graphics::Graphics;
 
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
@@ -117,6 +118,10 @@ fn main(hw: board::Hardware) -> ! {
     let led_pin = (gpio::Port::PortI, gpio::Pin::Pin1);
 
     sdram::init(rcc, fmc, &mut gpio);
+    i2c::init_pins_and_clocks(rcc, &mut gpio);
+    let mut i2c_3 = i2c::init(i2c_3);
+
+    let mut graphics = Graphics::init(ltdc, rcc, &mut gpio, &mut i2c_3);
 
     audio::init_sai_2_pins(&mut gpio);
     audio::init_sai_2(sai_2, rcc);
@@ -144,7 +149,7 @@ fn main(hw: board::Hardware) -> ! {
 
     let mut last_toggle_ticks = system_clock::ticks();
 
-    lcd.clear_screen();
+    graphics.prepare();
 
     loop {
 
@@ -155,7 +160,7 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        graphics::tick(&mut lcd);
+        graphics.tick(&mut i2c_3);
         rng::tick(&mut rng);
     }
 }
