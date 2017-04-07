@@ -8,7 +8,7 @@ extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
 extern crate bit_field;
 
-use stm32f7::{system_clock, board, embedded, touch, i2c, lcd};
+use stm32f7::{audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
 mod semi_hosting;
@@ -44,6 +44,11 @@ pub unsafe extern "C" fn reset() -> ! {
 
     stm32f7::heap::init();
 
+    unsafe {
+        let scb = stm32f7::cortex_m::peripheral::scb_mut();
+        scb.cpacr.modify(|v| v | 0b1111 << 20);
+    }
+
     main(board::hw());
 }
 
@@ -51,6 +56,7 @@ pub unsafe extern "C" fn reset() -> ! {
 fn main(hw: board::Hardware) -> ! {
 
     use embedded::interfaces::gpio::{self,Gpio};
+
 
     let board::Hardware {
         rcc,
@@ -90,7 +96,6 @@ fn main(hw: board::Hardware) -> ! {
                              gpio_k);
 
     system_clock::init(rcc, pwr, flash);
-
     rcc.ahb1enr.update(|r| {
 
         r.set_gpioaen(true);
@@ -108,11 +113,16 @@ fn main(hw: board::Hardware) -> ! {
 
     let led_pin = (gpio::Port::PortI, gpio::Pin::Pin1);
 
+    sdram::init(rcc, fmc, &mut gpio);
+
     let mut lcd = lcd::init(ltdc, rcc, &mut gpio);
 
     i2c::init_pins_and_clocks(rcc, &mut gpio);
     let mut i2c_3 = i2c::init(i2c_3);
-    touch::check_family_id(&mut i2c_3).unwrap();
+
+    audio::init_sai_2_pins(&mut gpio);
+    audio::init_sai_2(sai_2, rcc);
+    assert!(audio::init_wm8994(&mut i2c_3).is_ok());
 
     let mut led = gpio.to_output(led_pin,
                                  gpio::OutputType::PushPull,
@@ -120,11 +130,25 @@ fn main(hw: board::Hardware) -> ! {
                                  gpio::Resistor::NoPull,)
         .expect("led pin already in use");
 
-    println!("Enabling rng");
+
+    // let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
+    //                                                    Default::default(),
+    //                                                    rcc,
+    //                                                    syscfg,
+    //                                                    &mut gpio,
+    //                                                    ethernet_mac,
+                                                       // ethernet_dma);
+    // if let Err(e) = eth_device {
+    //     println!("ethernet init failed: {:?}", e);
+    // }
+
     let mut rng = rng::enable().expect("rng already enabled");
+
     let mut last_toggle_ticks = system_clock::ticks();
 
-    println!("entering main loop");
+    lcd.clear_screen();
+    touch::check_family_id(&mut i2c_3).unwrap();
+
     loop {
 
         let ticks = system_clock::ticks();
@@ -134,7 +158,5 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        graphics::tick(&mut lcd);
-        rng::tick(&mut rng);
     }
 }
