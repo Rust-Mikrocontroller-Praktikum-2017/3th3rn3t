@@ -15,6 +15,7 @@ mod semi_hosting;
 mod font;
 mod graphics;
 mod rng;
+mod sound;
 
 use rng::{Rng,ErrorType};
 
@@ -149,6 +150,8 @@ fn main(hw: board::Hardware) -> ! {
     lcd.clear_screen();
     touch::check_family_id(&mut i2c_3).unwrap();
 
+    let mut snd = sound::Sound::init(sai_2, rcc);
+
     loop {
 
         let ticks = system_clock::ticks();
@@ -158,6 +161,7 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
+        snd.tick();
         rng.tick();
     }
 }
