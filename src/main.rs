@@ -3,10 +3,13 @@
 
 #![feature(asm)]
 #![feature(const_fn)]
+#![feature(collections)]
 
 extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
 extern crate bit_field;
+#[macro_use]
+extern crate collections;
 
 use stm32f7::{audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
@@ -18,6 +21,7 @@ mod rng;
 mod sound;
 
 use rng::{Rng,ErrorType};
+use graphics::Graphics;
 
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
@@ -58,7 +62,6 @@ fn main(hw: board::Hardware) -> ! {
 
     use embedded::interfaces::gpio::{self,Gpio};
 
-
     let board::Hardware {
         rcc,
         pwr,
@@ -97,6 +100,7 @@ fn main(hw: board::Hardware) -> ! {
                              gpio_k);
 
     system_clock::init(rcc, pwr, flash);
+
     rcc.ahb1enr.update(|r| {
 
         r.set_gpioaen(true);
@@ -115,11 +119,10 @@ fn main(hw: board::Hardware) -> ! {
     let led_pin = (gpio::Port::PortI, gpio::Pin::Pin1);
 
     sdram::init(rcc, fmc, &mut gpio);
-
-    let mut lcd = lcd::init(ltdc, rcc, &mut gpio);
-
     i2c::init_pins_and_clocks(rcc, &mut gpio);
     let mut i2c_3 = i2c::init(i2c_3);
+
+    let mut graphics = Graphics::init(ltdc, rcc, &mut gpio, &mut i2c_3);
 
     audio::init_sai_2_pins(&mut gpio);
     audio::init_sai_2(sai_2, rcc);
@@ -147,8 +150,7 @@ fn main(hw: board::Hardware) -> ! {
 
     let mut last_toggle_ticks = system_clock::ticks();
 
-    lcd.clear_screen();
-    touch::check_family_id(&mut i2c_3).unwrap();
+    graphics.prepare();
 
     let mut snd = sound::Sound::init(sai_2, rcc);
 
@@ -161,7 +163,8 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        snd.tick();
+        // snd.tick();
+        graphics.tick(&mut i2c_3);
         rng.tick();
     }
 }
