@@ -142,7 +142,7 @@ fn main(hw: board::Hardware) -> ! {
     //     println!("ethernet init failed: {:?}", e);
     // }
 
-    let mut rng = rng::enable().expect("rng already enabled");
+    let mut rng = rng::Rng::init().expect("rng already enabled");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
@@ -158,5 +158,6 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
+        rng.tick();
     }
 }

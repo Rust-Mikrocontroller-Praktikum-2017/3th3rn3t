@@ -25,20 +25,7 @@ pub enum ErrorType {
 }
 
 
-pub fn enable() -> Result<Rng, ErrorType> {
-
-    let reg_content = unsafe { ptr::read_volatile(RNG_CR as *mut u32) };
-    if reg_content.get_bit(2) {
-        return Err(ErrorType::AlreadyEnabled);
-    }
-
-    enable_cr();
-    let rng = Rng(0x0, 0x0);
-    Ok(rng)
-}
-
-
-fn enable_cr () {
+fn enable_cr() {
 
     let mut bits_rcc_en = 0;
     bits_rcc_en.set_bit(6, true);
@@ -70,7 +57,7 @@ fn enable_cr () {
 }
 
 
-fn disable_cr () {
+fn disable_cr() {
 
     let mut bits = unsafe { ptr::read_volatile(RNG_CR as *mut u32) };
     bits.set_bit(2, false);
@@ -84,6 +71,37 @@ fn disable_cr () {
 
 
 impl Rng {
+
+    pub fn init() -> Result<Rng, ErrorType> {
+
+        let reg_content = unsafe { ptr::read_volatile(RNG_CR as *mut u32) };
+        if reg_content.get_bit(2) {
+            return Err(ErrorType::AlreadyEnabled);
+        }
+
+        enable_cr();
+        let rng = Rng(0x0, 0x0);
+        Ok(rng)
+    }
+
+
+    pub fn tick(&mut self) {
+        match self.poll_and_get() {
+
+            Ok(number) => {
+                println!("Random number received {}", number);
+            }
+            Err(e) => {
+                match e {
+                    _ => {
+                        println!("Error: {:?}", e);
+                    }
+                }
+            }
+        }
+    }
+
+
     pub fn poll_and_get(&mut self) -> Result<u32, ErrorType> {
 
         let status = unsafe { ptr::read_volatile(RNG_STATUS as *mut u32) };
@@ -127,26 +145,13 @@ impl Rng {
         Err(ErrorType::NotReady)
     }
 
+
     pub fn disable(self) {
         unsafe { ptr::write_volatile(RNG_CR as *mut u32, 0x0) };
+
     }
+
 }
 
-
-pub fn tick(rng: &mut Rng) {
-    match rng.poll_and_get() {
-
-        Ok(number) => {
-            println!("Random number received {}", number);
-        }
-        Err(e) => {
-            match e {
-                _ => {
-                    println!("Error: {:?}", e);
-                }
-            }
-        }
-    }
-}
 
 
