@@ -1,7 +1,11 @@
 [package]
-name = "3th3rn3t"
+name = "3th3rn3t_drivers"
 version = "0.1.0"
 authors = ["Benjamin Lipp and Julian Herr"]
+
+[[bin]]
+doc = true
+name = "3th3rn3t"
 
 [dependencies]
 cortex-m = "0.1.4"
