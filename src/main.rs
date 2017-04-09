@@ -14,6 +14,8 @@ extern crate collections;
 use stm32f7::{audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
+
+#[macro_use]
 mod semi_hosting;
 mod font;
 mod graphics;
@@ -22,6 +24,8 @@ mod sound;
 
 use rng::{Rng,ErrorType};
 use graphics::Graphics;
+
+static sin440: [u16; 48000] = include!("sin.hex");
 
 #[no_mangle]
 pub unsafe extern "C" fn reset() -> ! {
@@ -84,6 +88,7 @@ fn main(hw: board::Hardware) -> ! {
         syscfg,
         ethernet_mac,
         ethernet_dma,
+        rng,
         ..
     } = hw;
 
@@ -146,15 +151,17 @@ fn main(hw: board::Hardware) -> ! {
     //     println!("ethernet init failed: {:?}", e);
     // }
 
-    let mut rng = rng::Rng::init().expect("rng already enabled");
+    let mut random = rng::Rng::init(rng, rcc).expect("rng already enabled");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
     graphics.prepare();
 
-    let mut snd = sound::Sound::init(sai_2, rcc);
+    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc);
 
     loop {
+
+        println!("tick foobar");
 
         let ticks = system_clock::ticks();
         if (ticks - last_toggle_ticks)  > 1500 {
@@ -163,8 +170,13 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        // snd.tick();
-        graphics.tick(&mut i2c_3);
-        rng.tick();
+        println!("result from random.tick() {}", random.tick());
+        snd.tick();
+        // graphics.tick(&mut i2c_3);
+        if let Ok(number) = random.poll_and_get() {
+            snd.put_data(sai_2, &mut i2c_3, number);
+        } else {
+            println!("No random data ready");
+        }
     }
 }
