@@ -1,5 +1,7 @@
 //! # Driver for the stm32f7_discovery rng module
-//! Use at your own risk in the following way.
+//! Use at your own risk. AND NOT FOR CRYPTOGRAPHIC PURPOSES !!!einself
+//!
+//! Example
 //! ````
 //! let mut random = rng::init(rng, rcc);
 //! match random.poll_and_get() {
@@ -13,6 +15,13 @@
 //!         }
 //!     }
 //!````
+//! Since for disabling the rng, some rcc clock on the AHB2 Bus must be disabled as well.
+//! Therefore use .disable(rcc) after you are done.
+//! ````
+//! random.disable(rcc);
+//! ````
+//!
+//! Iter is currently not implemented. Pull Requests welcome!
 
 use core::ptr;
 use core::result::Result;
@@ -24,11 +33,10 @@ const RCC_BASE_ADDR: u32 = 0x4002_3800;
 const RCC_AHB2ENR: u32 = RCC_BASE_ADDR + 0x34;
 
 /// Contains state as well as the Rng Struct from embedded::board.
-pub struct Rng<'a> {
+pub struct Rng {
     last_number: u32,
     counter: u32,
-    board_rng: &'a mut board::rng::Rng
-
+    board_rng: &'static mut board::rng::Rng
 }
 
 ///Any of the errors (except AlreadyEnabled) can usually be resolved by initializing this
@@ -45,9 +53,11 @@ pub enum ErrorType {
 
 
 
-impl<'a> Rng<'a> {
+impl Rng {
 
-    pub fn init(rng: &'a mut board::rng::Rng, rcc: &mut board::rcc::Rcc) -> Result<Rng<'a>, ErrorType> {
+    ///! This will take semi-ownership (with &'static) for the rng struct
+    /// from board::rng.
+    pub fn init(rng: &'static mut board::rng::Rng, rcc: &mut board::rcc::Rcc) -> Result<Rng, ErrorType> {
 
         let control_register = rng.cr.read().rngen();
         // let reg_content = unsafe { ptr::read_volatile(RNG_CR as *mut u32) };
@@ -138,16 +148,18 @@ impl<'a> Rng<'a> {
         rcc.ahb2enr.update(|r| r.set_rngen(false));
     }
 
+    pub fn disable(mut self, rcc: &mut board::rcc::Rcc) {
+        use core::mem;
+        self.disable_cr(rcc);
+        mem::forget(self);
+    }
+
 
 }
-impl<'a> Drop for Rng<'a> {
+impl Drop for Rng {
 
+    /// PANICS EVERYTIME! Use .disable(rcc) explicitly!
     fn drop(&mut self) {
-        unsafe {
-            let mut reg = ptr::read_volatile(RCC_AHB2ENR as *const u32);
-            reg.set_bit(6, false);
-            ptr::write_volatile(RCC_AHB2ENR as *mut u32, reg);
-        }
-        self.board_rng.cr.update(|r| r.set_rngen(false));
+        panic!("Use .disable() method on your random struct!");
     }
 }
