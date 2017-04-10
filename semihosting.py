@@ -10,6 +10,7 @@ class SemiHostHelper(object):
 
     @classmethod
     def on_break(cls):
+        should_continue = False
         # get the current frame and inferior
         frame = gdb.selected_frame()
         inf = gdb.selected_inferior()
@@ -37,14 +38,20 @@ class SemiHostHelper(object):
 
                 if call_type == 0x05:
                     cls.handle_write(inf, arg_addr)
+                    should_continue = True
                 else:
                     raise NotImplementedError(
                         'Call type 0x{:X} not implemented'
                         .format(call_type))
             else:
-                raise ValueError('no semi-hosting breakpoint')
+                gdb.write("***Breakpoint received***\n")
         else:
             raise ValueError('no bkpt instruction')
+
+        if should_continue:
+            gdb.execute('set $do_continue = 1');
+        else:
+            gdb.execute('set $do_continue = 0');
 
     @classmethod
     def handle_write(cls, inf, args_addr):
@@ -67,6 +74,6 @@ class SemiHostHelper(object):
 
         # we manually map FDs. encoding is fixed at the rust-native utf8
         if fd == 1:
-            sys.stdout.write(data.decode('utf8'))
+            gdb.write(data.decode('utf8'))
         elif fd == 2:
-            sys.stderr.write(data.decode('utf8'))
+            gdb.write(data.decode('utf8'))

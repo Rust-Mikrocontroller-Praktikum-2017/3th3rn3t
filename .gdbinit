@@ -31,8 +31,10 @@ define semihosting-enable
       silent
       pi SemiHostHelper.on_break()
       set $pc = $pc + 2
-      continue
-      echo \n
-      frame
+      if $do_continue
+        continue
+      end
   end
 end
+
+semihosting-enable
