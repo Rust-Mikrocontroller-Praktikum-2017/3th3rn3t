@@ -11,7 +11,7 @@ extern crate bit_field;
 #[macro_use]
 extern crate collections;
 
-use stm32f7::{audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
+use stm32f7::{random,audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
 
@@ -19,10 +19,9 @@ use stm32f7::{audio, ethernet, sdram, system_clock, board, embedded, touch, i2c,
 mod semi_hosting;
 mod font;
 mod graphics;
-mod rng;
 mod sound;
 
-use rng::{Rng,ErrorType};
+use random::{Rng,ErrorType};
 use graphics::Graphics;
 
 static sin440: [u16; 48000] = include!("sin.hex");
@@ -129,9 +128,10 @@ fn main(hw: board::Hardware) -> ! {
 
     let mut graphics = Graphics::init(ltdc, rcc, &mut gpio, &mut i2c_3);
 
-    audio::init_sai_2_pins(&mut gpio);
-    audio::init_sai_2(sai_2, rcc);
-    assert!(audio::init_wm8994(&mut i2c_3).is_ok());
+    // original code - may be incompatible with our plans
+    // audio::init_sai_2_pins(&mut gpio);
+    // audio::init_sai_2(sai_2, rcc);
+    // assert!(audio::init_wm8994(&mut i2c_3).is_ok());
 
     let mut led = gpio.to_output(led_pin,
                                  gpio::OutputType::PushPull,
@@ -151,13 +151,13 @@ fn main(hw: board::Hardware) -> ! {
     //     println!("ethernet init failed: {:?}", e);
     // }
 
-    let mut random = rng::Rng::init(rng, rcc).expect("rng already enabled");
+    let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
     graphics.prepare();
 
-    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc);
+    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
 
     loop {
 
@@ -170,10 +170,10 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        println!("result from random.tick() {}", random.tick());
+        // println!("result from random.tick() {}", random.tick());
         snd.tick();
         // graphics.tick(&mut i2c_3);
-        if let Ok(number) = random.poll_and_get() {
+        if let Ok(number) = random_gen.poll_and_get() {
             snd.put_data(sai_2, &mut i2c_3, number);
         } else {
             println!("No random data ready");
