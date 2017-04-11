@@ -72,11 +72,6 @@ impl Sound {
         sai.acr1.update(|r| r.set_saiaen(false));
         sai.bcr1.update(|r| r.set_saiben(false));
 
-        println!("before wait for disable of saien");
-        while sai.acr1.read().saiaen() {}
-        while sai.bcr1.read().saiben() {}
-        println!("after wait for disable of saien");
-
         sai.bim.write(Default::default());
 
         // clear like all flags
@@ -111,7 +106,6 @@ impl Sound {
             r.set_ds(0b100);
             r.set_prtcfg(0b00);
             r.set_mono(false);
-            // r.set_mcjdiv(0b0010);
             r.set_nodiv(false);
             r.set_out_dri(false);
         });
@@ -163,19 +157,6 @@ impl Sound {
             println!("fifo threshhold is {}, should be 0 at this point", reg.flvl());
         }
 
-        if sai.acr1.read().dmaen() {
-            println!("DMA is enabled");
-        } else {
-            println!("DMA is disabled");
-        }
-
-        // match sai.acr1.read().prtcfg() {
-        //     0b00 => println!("free form mode"),
-        //     0b01 => println!("spdif form mode"),
-        //     0b10 => println!("ac97 form mode"),
-        //      _    => println!("reserved mode bits set")
-        // }
-
         println!("before wait for saienable");
         while !sai.acr1.read().saiaen() {}
         println!("after wait for saienable");
@@ -187,16 +168,14 @@ impl Sound {
             // read and check device family ID
             assert_eq!(conn.read(0).ok(), Some(0x8994));
             // reset device
-            try!(conn.write(0, 0));
-
+            conn.write(0, 0)?;
 
             // wm8994 Errata Work-Arounds
-            try!(conn.write(0x102, 0x0003));
-            try!(conn.write(0x817, 0x0000));
-            try!(conn.write(0x102, 0x0000));
+            conn.write(0x102, 0x0003)?;
+            conn.write(0x817, 0x0000)?;
+            conn.write(0x102, 0x0000)?;
 
             // Enable VMID soft start (fast), Start-up Bias Current Enabled
-            // MIC ONLY!
             conn.write(0x39, 0x006C)?;
 
             // Enable bias generator, Enable VMID
@@ -210,14 +189,9 @@ impl Sound {
             }
 
 
-
-
             // PWR
             {
                 let mut bits = 0b010;
-                // bits.set_bit(11 , true);
-                // bits.set_bit(1, true);
-                // bits.set_bit(0, true);
                 conn.write(0x0001, bits)?;
             }
 
@@ -225,23 +199,12 @@ impl Sound {
             // AIF1DAC1X
             {
                 let bits = 0x0303;
-                // let mut bits = conn.read(0x0005)?;
-                // bits.set_bit(11, true);
-                // bits.set_bit(10, true);
-                // bits.set_bit(9, true);
-                // bits.set_bit(8, true);
-                // bits.set_bit(0, true);
-                // bits.set_bit(1, true);
-                // bits.set_bit(2, true);
-                // bits.set_bit(3, true);
                 conn.write(0x0005, bits);
             }
 
             // AIF1DACXL_TO_DAC1L
             {
                 let mut bits = 0x01;
-                // bits.set_bit(0, true);
-                // bits.set_bit(1, true);
                 conn.write(0x0601, bits);
                 conn.write(0x602, bits);
             }
@@ -262,30 +225,24 @@ impl Sound {
             // AIF1 Word Length
             {
                 let mut bits = 0x4010;
-                // bits.set_bit(6, true);
-                // bits.set_bit(5, false);
                 conn.write(0x0300, bits)?;
             }
 
             // Enable slave mode
             {
                 let mut bits = 0x0;
-                // bits.set_bit(14, false);
                 conn.write(0x0302, bits)?;
             }
 
             // Enable CORE AIF1 Clock
             {
                 let mut bits = 0x0A;
-                // bits.set_bit(3, true);
-                // bits.set_bit(1, true);
                 conn.write(0x0208, bits);
             }
 
             // AIF1CLK EN
             {
                 let mut bits = 0x1;
-                // bits.set_bit(0, true); // clock enable
                 conn.write(0x0200, bits);
             }
 
@@ -307,32 +264,32 @@ impl Sound {
                 let power_mgnt_reg_1 = 0x0 |  0x0303 | 0x3003;
                 conn.write(0x1, power_mgnt_reg_1)?;
 
-                // /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate stages */
+                /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate stages */
                 conn.write( 0x60, 0x0022)?;
 
-                // /* Enable Charge Pump */
+                /* Enable Charge Pump */
                 conn.write( 0x4C, 0x9F25)?;
 
-                // /* Add Delay */
+                /* Add Delay */
                 system_clock::wait(5);
 
-                // /* Select DAC1 (Left) to Left Headphone Output PGA (HPOUT1LVOL) path */
+                /* Select DAC1 (Left) to Left Headphone Output PGA (HPOUT1LVOL) path */
                 conn.write( 0x2D, 0x0001)?;
 
-                // /* Select DAC1 (Right) to Right Headphone Output PGA (HPOUT1RVOL) path */
+                /* Select DAC1 (Right) to Right Headphone Output PGA (HPOUT1RVOL) path */
                 conn.write( 0x2E, 0x0001)?;
 
-                // /* Enable Left Output Mixer (MIXOUTL), Enable Right Output Mixer (MIXOUTR) */
-                // /* idem for SPKOUTL and SPKOUTR */
+                /* Enable Left Output Mixer (MIXOUTL), Enable Right Output Mixer (MIXOUTR) */
+                /* idem for SPKOUTL and SPKOUTR */
                 conn.write( 0x03, 0x0030 | 0x0300);
 
-                // /* Enable DC Servo and trigger start-up mode on left and right channels */
+                /* Enable DC Servo and trigger start-up mode on left and right channels */
                 conn.write( 0x54, 0x0033);
 
-                // /* Add Delay */
+                /* Add Delay */
                 system_clock::wait(200);
 
-                // /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate and output stages. Remove clamps */
+                /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate and output stages. Remove clamps */
                 conn.write( 0x60, 0x00EE)?;
             }
 
@@ -364,87 +321,6 @@ impl Sound {
                 conn.write(0x1D, 0x3F | 0x140)?;
             }
 
-
-            // // initiate headphone cold startup sequence
-            // conn.write(0x0110, 0x8100);
-
-            // // SOFTVOL
-            // {
-            //     let mut bits = 0x0;
-            //     bits.set_bit(9, false);
-            //     conn.write(0x420, bits);
-            //     conn.write(0x422, bits);
-            //     conn.write(0x610, bits);
-            //     conn.write(0x611, bits);
-            // }
-
-
-            // // HPVOL L again
-            // {
-            //     let mut bits = 0b111111;
-            //     bits.set_bit(6, true);
-            //     conn.write(0x1c, bits);
-            // }
-
-            // // HPVOL R again
-            // {
-            //     let mut bits = 0b111111;
-            //     bits.set_bit(6, true);
-            //     conn.write(0x1d, bits);
-            // }
-
-            // Thermal sensor disable
-            
-
-            // AIF1 SRC
-            {
-                // let mut bits = conn.read(0x0301)?;
-                // bits.set_bit(6, true);
-                // bits.set_bit(5, false);
-                // conn.write(0x0300, bits)?;
-            }
-
-
-            // AIF1DACXR_TO_DAC1R
-            // {
-            //     let mut bits = 0x0;
-            //     bits.set_bit(0, true);
-            //     bits.set_bit(1, true);
-            //     conn.write(0x0602, bits);
-            // }
-
-            // DAC1X VOL SET
-            // {
-            //     let mut bits = conn.read(0x0610)?; // TODO
-            //     bits.set_bit(9, false); // UN-MUTE
-            //     bits.set_bit(7, true);
-            //     bits.set_bit(6, true);
-            //     bits.set_bit(5, true);
-            //     bits.set_bit(4, true);
-            //     bits.set_bit(3, true);
-            //     bits.set_bit(2, true);
-            //     bits.set_bit(1, true);
-            //     bits.set_bit(8, true); // Update L AND R simultaneously
-            //     // bits.set_range(0..8, 0xC0); // 0db WHY does this not even compile? TODO
-            //     conn.write(0x0610, bits);
-            // }
-
-            // DAC1L to HPOUT1L
-            // {
-            //     let mut bits = conn.read(0x002d)?;
-            //     bits.set_bit(8, true); // DAC1L
-            //     conn.write(0x002d, bits);
-            // }
-
-            // DAC1R to HPOUT1R
-            // {
-            //     let mut bits = conn.read(0x002e)?;
-            //     bits.set_bit(8, true); // DAC1R
-            //     conn.write(0x002e, bits);
-            // }
-
-
-
             system_clock::wait(10);
             Ok(())
         });
@@ -460,30 +336,6 @@ impl Sound {
 
 
     pub fn put_data(&mut self, sai: &mut Sai, i2c_3: &mut i2c::I2C, data: u32) {
-
-        // let ret = i2c_3.connect::<u16, _>(WM8994_ADDRESS, |mut conn| {
-
-        //     let mut reg = conn.read(0x1)?;
-
-        //     reg.set_bit(11, false);
-        //     reg.set_bit(9, false);
-        //     reg.set_bit(8, false);
-
-        //     conn.write(0x1, reg)?;
-
-        //     reg.set_bit(11, true);
-        //     reg.set_bit(9, true);
-        //     reg.set_bit(8, true);
-
-        //     conn.write(0x1, reg)?;
-
-        //     Ok(())
-        // });
-
-        // match ret {
-        //     Err(e) => println!("Error connect during put_data"),
-        //     _ => {}
-        // };
 
         if sai.asr.read().flvl() != 0b101 {
             // println!("setting data");
