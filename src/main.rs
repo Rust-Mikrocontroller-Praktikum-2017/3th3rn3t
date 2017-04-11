@@ -3,17 +3,17 @@
 
 #![feature(asm)]
 #![feature(const_fn)]
-#![feature(collections)]
+#![feature(alloc, collections)]
 
+#[macro_use]
 extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
 extern crate bit_field;
 #[macro_use]
 extern crate collections;
+extern crate alloc;
 
-use stm32f7::{random,audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
-
-#[macro_use]
+use stm32f7::{random, audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
 mod semi_hosting;
@@ -140,16 +140,18 @@ fn main(hw: board::Hardware) -> ! {
         .expect("led pin already in use");
 
 
-    // let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
-    //                                                    Default::default(),
-    //                                                    rcc,
-    //                                                    syscfg,
-    //                                                    &mut gpio,
-    //                                                    ethernet_mac,
-                                                       // ethernet_dma);
-    // if let Err(e) = eth_device {
-    //     println!("ethernet init failed: {:?}", e);
-    // }
+    let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
+                                                       Default::default(),
+                                                       rcc,
+                                                       syscfg,
+                                                       &mut gpio,
+                                                       ethernet_mac,
+                                                       ethernet_dma);
+    if let Err(e) = eth_device {
+        println!("ethernet init failed: {:?}", e);
+    } else {
+        println!("ethernet init successful");
+    }
 
     let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
 
@@ -172,7 +174,7 @@ fn main(hw: board::Hardware) -> ! {
 
         // println!("result from random.tick() {}", random.tick());
         snd.tick();
-        // graphics.tick(&mut i2c_3);
+        graphics.tick(&mut i2c_3);
         if let Ok(number) = random_gen.poll_and_get() {
             snd.put_data(sai_2, &mut i2c_3, number);
         } else {

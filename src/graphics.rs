@@ -2,41 +2,48 @@ use stm32f7::lcd::{self, Lcd, Color};
 use stm32f7::{self, system_clock, touch};
 use i2c::{self, I2C};
 use core::ptr;
-use collections::{vec,Vec};
+use collections::{vec, Vec};
 use board::rcc::Rcc;
 use board::ltdc::Ltdc;
-use embedded::interfaces::gpio::{Gpio};
+use embedded::interfaces::gpio::Gpio;
+use alloc::rc::{self, Rc};
+use collections::boxed::{self, Box};
 
-#[feature(inclusive_range_syntax)]
-
-pub struct ColorSquare {
-    x: u16,
-    y: u16,
-    len: u16,
-    color: u16
-}
-
-impl ColorSquare {
-    pub const fn new(x: u16, y: u16, len: u16, color: u16) -> Self {
-        ColorSquare{x, y, len, color}
+enum Button {
+    ColorSquareButton {
+        x: u16,
+        y: u16,
+        len: u16,
+        color: u16
     }
+}
+/*
+ *
+ *trait Button {
+ *    fn touched_inside(&self, x: u16, y: u16) -> bool;
+ *    fn draw(&self, lcd: &mut Lcd);
+ *}
+ *
+ */
+impl Button {
 
-    pub fn touched_inside(&self, x: u16, y: u16) -> bool {
-        self.x <= x && x <= (self.x + self.len) && self.y <= y && y <= (self.y + self.len)
+    pub fn touched_inside(&self, touch_x: u16, touch_y: u16) -> bool {
+        match self {
+            &Button::ColorSquareButton {x, y, len, color} => (x <= touch_x && touch_x <= (x + len) && y <= touch_y && touch_y <= (y + len)),
+        }
     }
 
     pub fn draw(&self, lcd: &mut Lcd) {
-        Graphics::draw_square_filled(lcd, self.x, self.y, self.len, self.color);
+        match self {
+            &Button::ColorSquareButton {x, y, len, color} => Graphics::draw_square_filled(lcd, x, y, len, color),
+        }
     }
 
-    pub fn get_color(&self) -> u16 {
-        self.color
-    }
 }
 
 pub struct Graphics {
     lcd: Lcd,
-    color_buttons: Vec<ColorSquare>,
+    buttons: Vec<Rc<Button>>,
     touch_color: u16
 }
 
@@ -45,7 +52,7 @@ impl Graphics {
     pub fn init(ltdc: &'static mut Ltdc, rcc: &mut Rcc, mut gpio: &mut Gpio, i2c_3: &mut I2C) -> Self {
         let mut graphics = Graphics {
             lcd: lcd::init(ltdc, rcc, &mut gpio),
-            color_buttons: Vec::new(),
+            buttons: Vec::new(),
             touch_color: 0xffff
         };
         touch::check_family_id(i2c_3).unwrap();
@@ -54,17 +61,24 @@ impl Graphics {
 
     pub fn prepare(&mut self) {
         self.lcd.clear_screen();
-        self.color_buttons = vec![
-            ColorSquare::new(10, 10, 50, 0xffff),
-            ColorSquare::new(10, 70, 50, 0xff00),
-            ColorSquare::new(10, 130, 50, 0xaacc),
-            ColorSquare::new(10, 190, 50, 0xccaa)];
+        self.lcd.set_background_color(Color::from_hex(0x0));
 
-        for color_button in self.color_buttons.iter() {
-            color_button.draw(&mut self.lcd);
+        self.touch_color = 0xffff;
+
+        let b1 = Rc::new(Button::ColorSquareButton {x: 10, y: 10,  len: 50, color: self.touch_color});
+        let b2 = Rc::new(Button::ColorSquareButton {x: 10, y: 70,  len: 50, color: 0xff00});
+        let b3 = Rc::new(Button::ColorSquareButton {x: 10, y: 130, len: 50, color: 0xaacc});
+        let b4 = Rc::new(Button::ColorSquareButton {x: 10, y: 190, len: 50, color: 0xccaa});
+
+        self.buttons.push(b1.clone());
+        self.buttons.push(b2.clone());
+        self.buttons.push(b3.clone());
+        self.buttons.push(b4.clone());
+
+        for button in self.buttons.iter() {
+            button.draw(&mut self.lcd);
         }
 
-        self.touch_color = self.color_buttons[0].get_color();
     }
 
     pub fn tick(&mut self, i2c_3: &mut I2C) {
@@ -73,10 +87,14 @@ impl Graphics {
             let mut color_changed = false;
 
             // check if one of the color buttons was touched
-            for color_button in self.color_buttons.iter() {
-                if !color_changed && color_button.touched_inside(touch.x, touch.y) {
-                    self.touch_color = color_button.get_color();
-                    color_changed = true;
+            for button in self.buttons.iter() {
+                match **button {
+                    Button::ColorSquareButton {x, y, len, color} => {
+                        if !color_changed && button.touched_inside(touch.x, touch.y) {
+                            self.touch_color = color;
+                            color_changed = true;
+                        }
+                    }
                 }
             }
 
