@@ -53,10 +53,8 @@ pub unsafe extern "C" fn reset() -> ! {
 
     stm32f7::heap::init();
 
-    unsafe {
-        let scb = stm32f7::cortex_m::peripheral::scb_mut();
-        scb.cpacr.modify(|v| v | 0b1111 << 20);
-    }
+    let scb = stm32f7::cortex_m::peripheral::scb_mut();
+    scb.cpacr.modify(|v| v | 0b1111 << 20);
 
     main(board::hw());
 }
@@ -186,14 +184,16 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
-        println!("random output: {}", random_gen.poll_and_get().unwrap_or(0));
+        // println!("random output: {}", random_gen.poll_and_get().unwrap_or(0));
         // println!("result from random.tick() {}", random.tick());
-        snd.tick();
+        // sound_dat = snd.tick();
         // graphics.tick(&mut i2c_3);
         if let Ok(number) = random_gen.poll_and_get() {
             snd.put_data(sai_2, &mut i2c_3, number);
         } else {
             println!("No random data ready");
         }
+    }
+}
     }
 }
