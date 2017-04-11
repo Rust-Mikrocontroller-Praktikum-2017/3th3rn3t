@@ -12,6 +12,60 @@ pub struct Sound {}
 
 impl Sound {
 
+    fn init_clock(sai: &mut Sai, i2c_3: &mut i2c::I2C, rcc: &mut Rcc) {
+
+        println!("getting bit of pllsrc {}", rcc.pllcfgr.read().pllsrc());
+        println!("getting factor n of pllsaicfgr {}", rcc.pllsaicfgr.read().pllsain());
+        // TODO if we are using PLLSAIQ to drive this unit, is PLLI2S relevant?
+        // // Disable the PLLI2S
+        // rcc.cr.update(|r| r.set_plli2son(false));
+        // println!("before wait for pllclock");
+        // while rcc.cr.read().plli2srdy() {}
+        // println!("after wait for pllclock");
+
+        // disable PLLSAIQ
+        rcc.cr.update(|r| r.set_pllsaion(false));
+        while rcc.cr.read().pllsairdy() {}
+
+        // disable PLLI2S, because SAI2SEL will be written later
+        rcc.cr.update(|r| r.set_plli2son(false));
+        while rcc.cr.read().plli2srdy() {}
+
+
+        rcc.dkcfgr1.update(|r| {
+            r.set_sai2sel(0b00); // SET PLLSAI_Q / PLLSAIDIVQ
+        });
+
+        println!("clock config");
+
+        // In case PLLSOURCE is HSE
+        // then PLL_(VCO INPUT) = PLLSRC/PLLM
+        let vcoinput = 25000000 / u32::from(rcc.pllcfgr.read().pllm());
+        let freq_vcoclock = vcoinput * u32::from(rcc.pllsaicfgr.read().pllsain());
+        println!("pllsaiq {}", rcc.pllsaicfgr.read().pllsaiq());
+        let freq_pllsaiq = freq_vcoclock / u32::from(rcc.pllsaicfgr.read().pllsaiq());
+        println!("pllsaidivq {}", rcc.dkcfgr1.read().pllsaidivq());
+        // pllsaidivq stored with offset
+        let frequency = freq_pllsaiq / (u32::from(rcc.dkcfgr1.read().pllsaidivq() + 1));
+
+        let mckdiv = 0b0110;
+
+        println!("Our SAI CLK Frequency seems to be {}", frequency);
+
+        // bp!();
+
+        sai.acr1.update(|r| r.set_mcjdiv(mckdiv as u8));
+
+        // enable PLLSAIQ
+        rcc.cr.update(|r| r.set_pllsaion(true));
+        while !rcc.cr.read().pllsairdy() {}
+
+        // enable PLLI2S
+        rcc.cr.update(|r| r.set_plli2son(true));
+        while !rcc.cr.read().plli2srdy() {}
+
+    }
+
     pub fn init(sai: &mut Sai, i2c_3: &mut i2c::I2C, rcc: &mut Rcc, gpio: &mut Gpio) -> Self {
 
 
@@ -40,35 +94,9 @@ impl Sound {
         // Flush the fifo
         sai.bcr2.update(|r| r.set_fflus(true)); // fifo_flush
 
-        // Disable the PLLI2S
-        rcc.cr.update(|r| r.set_plli2son(false));
-        println!("before wait for pllclock");
-        while rcc.cr.read().plli2srdy() {}
-        println!("after wait for pllclock");
-
-        //TODO set clock dividers here
-        // SAI_CLK_x = SAI_CLK(first level)/PLLI2SDIVQ
-        rcc.dkcfgr1.update(|r| r.set_plli2sdiv(1 - 1));
-
+        Self::init_clock(sai, i2c_3, rcc);
 
         rcc.dkcfgr1.update(|r| r.set_sai2sel(0)); // sai2_clock_source pllsaiq/pllsaiq
-
-        // SET PLLI2S_CLK 344 MHZ, PLLI2DIVQ = 7
-        rcc.plli2scfgr
-            .update(|r| {
-                r.set_plli2sn(344);
-                r.set_plli2sq(7);
-            });
-
-        // SAI_CLK_x = SAI_CLK(first level)/PLLI2SDIVQ
-        rcc.dkcfgr1.update(|r| r.set_plli2sdiv(1 - 1));
-
-
-        // Enable the PLLI2S
-        rcc.cr.update(|r| r.set_plli2son(true));
-        println!("before wait for pllclock VER 2");
-        while !rcc.cr.read().plli2srdy() {}
-        println!("after wait for pllclock VER 2");
 
         rcc.apb2enr.update(|r| r.set_sai2en(true));
 
@@ -78,13 +106,12 @@ impl Sound {
 
         sai.acr1.update(|r| {
             // clock must be present
-            r.set_saiaen(true);
             r.set_mode(0b00); // PROBABLY this if not 0b01
             r.set_mono(false);
             r.set_ds(0b100);
             r.set_prtcfg(0b00);
             r.set_mono(false);
-            r.set_mcjdiv(0b0010);
+            // r.set_mcjdiv(0b0010);
             r.set_nodiv(false);
             r.set_out_dri(false);
         });
@@ -122,6 +149,7 @@ impl Sound {
             r.set_sloten(0xff);
         });
 
+        sai.acr1.update(|r| r.set_saiaen(true));
         // read status bits
         {
             let reg = sai.asr.read();
@@ -133,7 +161,6 @@ impl Sound {
             }
 
             println!("fifo threshhold is {}, should be 0 at this point", reg.flvl());
-
         }
 
         if sai.acr1.read().dmaen() {
@@ -169,74 +196,256 @@ impl Sound {
             try!(conn.write(0x102, 0x0000));
 
             // Enable VMID soft start (fast), Start-up Bias Current Enabled
-            try!(conn.write(0x39, 0x006C));
+            // MIC ONLY!
+            conn.write(0x39, 0x006C)?;
 
             // Enable bias generator, Enable VMID
-            try!(conn.write(0x01, 0x0003));
+            conn.write(0x01, 0x0003)?;
 
             system_clock::wait(50);
 
+            {
+                let mut bits = 0x0;
+                conn.write(0x02, bits)?;
+            }
+
+
+
+
+            // PWR
+            {
+                let mut bits = 0b010;
+                // bits.set_bit(11 , true);
+                // bits.set_bit(1, true);
+                // bits.set_bit(0, true);
+                conn.write(0x0001, bits)?;
+            }
+
+
             // AIF1DAC1X
             {
-                let mut bits = conn.read(0x0005)?;
-                bits.set_bit(9, true);
-                bits.set_bit(8, true);
+                let bits = 0x0303;
+                // let mut bits = conn.read(0x0005)?;
+                // bits.set_bit(11, true);
+                // bits.set_bit(10, true);
+                // bits.set_bit(9, true);
+                // bits.set_bit(8, true);
+                // bits.set_bit(0, true);
+                // bits.set_bit(1, true);
+                // bits.set_bit(2, true);
+                // bits.set_bit(3, true);
                 conn.write(0x0005, bits);
             }
 
             // AIF1DACXL_TO_DAC1L
             {
-                let mut bits = 0x0;
-                bits.set_bit(0, true);
-                bits.set_bit(1, true);
+                let mut bits = 0x01;
+                // bits.set_bit(0, true);
+                // bits.set_bit(1, true);
                 conn.write(0x0601, bits);
+                conn.write(0x602, bits);
             }
 
+            //Disable AF1 Timeslot 1 Mixer Path
+            {
+                let bits = 0x0;
+                conn.write(0x604, bits)?;
+                conn.write(0x605, bits)?;
+            }
 
-            // AIF1DACXR_TO_DAC1R
+            // Set frequency
+            {
+                let mut bits = 0x0033;
+                conn.write(0x210, bits)?;
+            }
+
+            // AIF1 Word Length
+            {
+                let mut bits = 0x4010;
+                // bits.set_bit(6, true);
+                // bits.set_bit(5, false);
+                conn.write(0x0300, bits)?;
+            }
+
+            // Enable slave mode
             {
                 let mut bits = 0x0;
-                bits.set_bit(0, true);
-                bits.set_bit(1, true);
-                conn.write(0x0602, bits);
+                // bits.set_bit(14, false);
+                conn.write(0x0302, bits)?;
             }
 
-            // DAC1X VOL SET
+            // Enable CORE AIF1 Clock
             {
-                let mut bits = 0xC0;
-                bits.set_bit(9, false); // UN-MUTE
-                bits.set_bit(8, true); // Update L AND R simultaneously
-                // bits.set_range(0..8, 0xC0); // 0db WHY does this fail? TODO
-                conn.write(0x0610, bits);
+                let mut bits = 0x0A;
+                // bits.set_bit(3, true);
+                // bits.set_bit(1, true);
+                conn.write(0x0208, bits);
             }
 
-
-            // DAC1L to HPOUT1L
+            // AIF1CLK EN
             {
-                let mut bits = conn.read(0x002d)?;
-                bits.set_bit(8, true); // DAC1L
-                conn.write(0x002d, bits);
-            }
-
-
-            // DAC1R to HPOUT1R
-            {
-                let mut bits = conn.read(0x002e)?;
-                bits.set_bit(8, true); // DAC1R
-                conn.write(0x002e, bits);
-            }
-
-            // AIF1CLK EN, technically unnecessary but for reference
-            {
-                let mut bits = 0x0;
-                bits.set_bit(0, true); // clock enable
+                let mut bits = 0x1;
+                // bits.set_bit(0, true); // clock enable
                 conn.write(0x0200, bits);
             }
 
 
-            // initiate headphone cold startup sequence
-            conn.write(0x0110, 0x8100);
+            // For some reason another one of the bias generator
+            {
+                let mut bits = 0x3003;
+                conn.write(0x01, bits)?;
+            }
 
+            // Class W Envelope Tracking????
+            {
+                let mut bits = 0x05;
+                conn.write(0x51, bits)?;
+            }
+
+            // Manually initiating startup sequence of headphones
+            {
+                let power_mgnt_reg_1 = 0x0 |  0x0303 | 0x3003;
+                conn.write(0x1, power_mgnt_reg_1)?;
+
+                // /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate stages */
+                conn.write( 0x60, 0x0022)?;
+
+                // /* Enable Charge Pump */
+                conn.write( 0x4C, 0x9F25)?;
+
+                // /* Add Delay */
+                system_clock::wait(5);
+
+                // /* Select DAC1 (Left) to Left Headphone Output PGA (HPOUT1LVOL) path */
+                conn.write( 0x2D, 0x0001)?;
+
+                // /* Select DAC1 (Right) to Right Headphone Output PGA (HPOUT1RVOL) path */
+                conn.write( 0x2E, 0x0001)?;
+
+                // /* Enable Left Output Mixer (MIXOUTL), Enable Right Output Mixer (MIXOUTR) */
+                // /* idem for SPKOUTL and SPKOUTR */
+                conn.write( 0x03, 0x0030 | 0x0300);
+
+                // /* Enable DC Servo and trigger start-up mode on left and right channels */
+                conn.write( 0x54, 0x0033);
+
+                // /* Add Delay */
+                system_clock::wait(200);
+
+                // /* Enable HPOUT1 (Left) and HPOUT1 (Right) intermediate and output stages. Remove clamps */
+                conn.write( 0x60, 0x00EE)?;
+            }
+
+            // Doing unmutes
+            {
+                /* Unmute DAC 1 (Left) */
+                conn.write(0x610, 0x00C0)?;
+
+                /* Unmute DAC 1 (Right) */
+                conn.write(0x611, 0x00C0)?;
+
+                /* Unmute the AIF1 Timeslot 0 DAC path */
+                conn.write(0x420, 0x0000)?;
+
+                /* Unmute DAC 2 (Left) */
+                conn.write(0x612, 0x00C0)?;
+
+                /* Unmute DAC 2 (Right) */
+                conn.write(0x613, 0x00C0)?;
+
+                /* Unmute the AIF1 Timeslot 1 DAC2 path */
+                conn.write(0x422, 0x0000)?;
+
+                /* Volume Control */
+                // wm8994_SetVolume(DeviceAddr, Volume);
+                conn.write(0x1C, 0x3F | 0x140)?;
+
+                /* Right Headphone Volume */
+                conn.write(0x1D, 0x3F | 0x140)?;
+            }
+
+
+            // // initiate headphone cold startup sequence
+            // conn.write(0x0110, 0x8100);
+
+            // // SOFTVOL
+            // {
+            //     let mut bits = 0x0;
+            //     bits.set_bit(9, false);
+            //     conn.write(0x420, bits);
+            //     conn.write(0x422, bits);
+            //     conn.write(0x610, bits);
+            //     conn.write(0x611, bits);
+            // }
+
+
+            // // HPVOL L again
+            // {
+            //     let mut bits = 0b111111;
+            //     bits.set_bit(6, true);
+            //     conn.write(0x1c, bits);
+            // }
+
+            // // HPVOL R again
+            // {
+            //     let mut bits = 0b111111;
+            //     bits.set_bit(6, true);
+            //     conn.write(0x1d, bits);
+            // }
+
+            // Thermal sensor disable
+            
+
+            // AIF1 SRC
+            {
+                // let mut bits = conn.read(0x0301)?;
+                // bits.set_bit(6, true);
+                // bits.set_bit(5, false);
+                // conn.write(0x0300, bits)?;
+            }
+
+
+            // AIF1DACXR_TO_DAC1R
+            // {
+            //     let mut bits = 0x0;
+            //     bits.set_bit(0, true);
+            //     bits.set_bit(1, true);
+            //     conn.write(0x0602, bits);
+            // }
+
+            // DAC1X VOL SET
+            // {
+            //     let mut bits = conn.read(0x0610)?; // TODO
+            //     bits.set_bit(9, false); // UN-MUTE
+            //     bits.set_bit(7, true);
+            //     bits.set_bit(6, true);
+            //     bits.set_bit(5, true);
+            //     bits.set_bit(4, true);
+            //     bits.set_bit(3, true);
+            //     bits.set_bit(2, true);
+            //     bits.set_bit(1, true);
+            //     bits.set_bit(8, true); // Update L AND R simultaneously
+            //     // bits.set_range(0..8, 0xC0); // 0db WHY does this not even compile? TODO
+            //     conn.write(0x0610, bits);
+            // }
+
+            // DAC1L to HPOUT1L
+            // {
+            //     let mut bits = conn.read(0x002d)?;
+            //     bits.set_bit(8, true); // DAC1L
+            //     conn.write(0x002d, bits);
+            // }
+
+            // DAC1R to HPOUT1R
+            // {
+            //     let mut bits = conn.read(0x002e)?;
+            //     bits.set_bit(8, true); // DAC1R
+            //     conn.write(0x002e, bits);
+            // }
+
+
+
+            system_clock::wait(10);
             Ok(())
         });
 
@@ -245,7 +454,7 @@ impl Sound {
     }
 
     pub fn tick(&mut self) {
-        println!("Sound Tick");
+        // println!("Sound Tick");
     }
 
 
@@ -277,7 +486,7 @@ impl Sound {
         // };
 
         if sai.asr.read().flvl() != 0b101 {
-            println!("setting data");
+            // println!("setting data");
             sai.adr.update(|reg| reg.set_data(data));
         }
 
