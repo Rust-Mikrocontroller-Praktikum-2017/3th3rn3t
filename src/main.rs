@@ -141,12 +141,12 @@ fn main(hw: board::Hardware) -> ! {
 
 
     let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
-                                                       Default::default(),
-                                                       rcc,
-                                                       syscfg,
-                                                       &mut gpio,
-                                                       ethernet_mac,
-                                                       ethernet_dma);
+    Default::default(),
+    rcc,
+    syscfg,
+    &mut gpio,
+    ethernet_mac,
+    ethernet_dma);
     if let Err(e) = eth_device {
         println!("ethernet init failed: {:?}", e);
     } else {
@@ -154,7 +154,7 @@ fn main(hw: board::Hardware) -> ! {
     }
 
     // println!("rng enable now");
-    // let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
+    let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
     // println!("rng enabled ready");
 
     let mut last_toggle_ticks = system_clock::ticks();
@@ -171,9 +171,9 @@ fn main(hw: board::Hardware) -> ! {
 
     let mut sound_dat = 2108800746;
     // let mut sound_dat = random_gen.poll_and_get().unwrap();
-        // sai_2.acr2.update(|r| r.set_fflus(true));
-        // sai_2.acr2.update(|r| r.set_mute(true));
-        // println!("NO MORE WRITES");
+    // sai_2.acr2.update(|r| r.set_fflus(true));
+    // sai_2.acr2.update(|r| r.set_mute(true));
+    // println!("NO MORE WRITES");
 
     loop {
         // bp!();
@@ -197,7 +197,5 @@ fn main(hw: board::Hardware) -> ! {
         } else {
             println!("No random data ready");
         }
-    }
-}
     }
 }
