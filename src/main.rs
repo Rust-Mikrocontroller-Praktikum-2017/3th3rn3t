@@ -9,20 +9,21 @@
 extern crate stm32f7_discovery as stm32f7;
 extern crate r0;
 extern crate bit_field;
-#[macro_use]
 extern crate collections;
 extern crate alloc;
 
+
+#[macro_use]
 use stm32f7::{random, audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
 mod semi_hosting;
 mod font;
-mod graphics;
+// mod graphics;
 mod sound;
 
 use random::{Rng,ErrorType};
-use graphics::Graphics;
+// use graphics::Graphics;
 
 static sin440: [u16; 48000] = include!("sin.hex");
 
@@ -61,6 +62,7 @@ pub unsafe extern "C" fn reset() -> ! {
 }
 
 
+#[inline(never)]
 fn main(hw: board::Hardware) -> ! {
 
     use embedded::interfaces::gpio::{self,Gpio};
@@ -126,7 +128,7 @@ fn main(hw: board::Hardware) -> ! {
     i2c::init_pins_and_clocks(rcc, &mut gpio);
     let mut i2c_3 = i2c::init(i2c_3);
 
-    let mut graphics = Graphics::init(ltdc, rcc, &mut gpio, &mut i2c_3);
+    // let mut graphics = Graphics::init(ltdc, rcc, &mut gpio, &mut i2c_3);
 
     // original code - may be incompatible with our plans
     // audio::init_sai_2_pins(&mut gpio);
@@ -153,17 +155,29 @@ fn main(hw: board::Hardware) -> ! {
         println!("ethernet init successful");
     }
 
+    println!("rng enable now");
     let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
+    println!("rng enabled ready");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
-    graphics.prepare();
+
+    // graphics.prepare();
+    // lcd controller
+
+    let mut lcd = lcd::init(ltdc, rcc, &mut gpio);
+    // let mut layer_1 = lcd.layer_1().unwrap();
+    // let mut layer_2 = lcd.layer_2().unwrap();
+
 
     let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
 
+    let mut sound_dat = random_gen.poll_and_get().unwrap();
+
     loop {
 
-        println!("tick foobar");
+        // bp!();
+        // println!("tick foobar");
 
         let ticks = system_clock::ticks();
         if (ticks - last_toggle_ticks)  > 1500 {
@@ -172,9 +186,10 @@ fn main(hw: board::Hardware) -> ! {
             last_toggle_ticks = ticks;
         }
 
+        println!("random output: {}", random_gen.poll_and_get().unwrap_or(0));
         // println!("result from random.tick() {}", random.tick());
         snd.tick();
-        graphics.tick(&mut i2c_3);
+        // graphics.tick(&mut i2c_3);
         if let Ok(number) = random_gen.poll_and_get() {
             snd.put_data(sai_2, &mut i2c_3, number);
         } else {
