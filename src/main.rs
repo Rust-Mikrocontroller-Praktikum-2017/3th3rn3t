@@ -140,13 +140,16 @@ fn main(hw: board::Hardware) -> ! {
         .expect("led pin already in use");
 
 
-    let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
-    Default::default(),
-    rcc,
-    syscfg,
-    &mut gpio,
-    ethernet_mac,
-    ethernet_dma);
+    let mut eth_device = ethernet::EthernetDevice::new(
+        Default::default(),
+        Default::default(),
+        rcc,
+        syscfg,
+        &mut gpio,
+        ethernet_mac,
+        ethernet_dma
+        );
+
     if let Err(e) = eth_device {
         println!("ethernet init failed: {:?}", e);
     } else {
