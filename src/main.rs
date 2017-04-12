@@ -156,9 +156,7 @@ fn main(hw: board::Hardware) -> ! {
         println!("ethernet init successful");
     }
 
-    // println!("rng enable now");
     let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
-    // println!("rng enabled ready");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
@@ -170,16 +168,10 @@ fn main(hw: board::Hardware) -> ! {
     // let mut layer_2 = lcd.layer_2().unwrap();
 
 
-    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
-
-    let mut sound_dat = 2108800746;
-    // let mut sound_dat = random_gen.poll_and_get().unwrap();
-    // sai_2.acr2.update(|r| r.set_fflus(true));
-    // sai_2.acr2.update(|r| r.set_mute(true));
-    // println!("NO MORE WRITES");
+    // let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
+    // let mut sound_dat = 2108800746;
 
     loop {
-        // bp!();
         // println!("tick foobar");
 
         let ticks = system_clock::ticks();
@@ -188,17 +180,6 @@ fn main(hw: board::Hardware) -> ! {
             led.set(!current_led_state);
             last_toggle_ticks = ticks;
         }
-
-        sound_dat = snd.put_data(sai_2, &mut i2c_3, sound_dat);
-        // println!("{}", sound_dat);
-        // println!("random output: {}", random_gen.poll_and_get().unwrap_or(0));
-        // println!("result from random.tick() {}", random.tick());
-        // sound_dat = snd.tick();
-        // graphics.tick(&mut i2c_3);
-        if let Ok(number) = random_gen.poll_and_get() {
-            snd.put_data(sai_2, &mut i2c_3, number);
-        } else {
-            println!("No random data ready");
-        }
+        // sound_dat = snd.put_data(sai_2, &mut i2c_3, sound_dat);
     }
 }
