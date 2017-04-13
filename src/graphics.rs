@@ -42,7 +42,7 @@ impl Button {
 }
 
 pub struct Graphics {
-    lcd: Lcd,
+    pub lcd: Lcd,
     buttons: Vec<Rc<Button>>,
     touch_color: u16
 }
@@ -59,9 +59,13 @@ impl Graphics {
         graphics
     }
 
-    pub fn prepare(&mut self) {
+    pub fn clear_screen(&mut self) {
         self.lcd.clear_screen();
         self.lcd.set_background_color(Color::from_hex(0x0));
+    }
+
+    pub fn prepare(&mut self) {
+        self.clear_screen();
 
         self.touch_color = 0xffff;
 

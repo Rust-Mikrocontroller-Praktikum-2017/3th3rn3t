@@ -171,13 +171,20 @@ fn main(hw: board::Hardware) -> ! {
         println!("ethernet init successful");
     }
 
-    let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
+    //let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
-    graphics.prepare();
+    //graphics.prepare();
+    graphics.clear_screen();
+    println!("clear screen");
 
-    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
+    //let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
+
+    let square_len = 25 as u16;
+    let mut x = 0 as u16;
+    let mut y = 0 as u16;
+    let mut color = 0 as u16;
 
     loop {
 
@@ -203,8 +210,65 @@ fn main(hw: board::Hardware) -> ! {
 
         // this is the Ethernet tick
         if let Ok(ref mut eth_device) = eth_device {
-            if let Err(err) = eth_device.handle_next_packet(&packets) {
-                match err {
+            let res = eth_device.handle_next_packet(&packets);
+            // draw some nice squares
+            if res.is_ok() {
+                let parse_res = res.unwrap();
+
+                // base color depending on type
+                match parse_res.pkt_type {
+                    ParseResultType::ARP => { color = 0xffff }
+                    ParseResultType::DHCP => { color = 0xff00 }
+                    ParseResultType::ICMP => { color = 0xfff0 }
+                    ParseResultType::DNS => { color = 0xaacc }
+                    ParseResultType::HTTP => { color = 0xccaa }
+                    ParseResultType::Unknown => { color = 0x0 }
+                }
+
+                fn eth_addr_as_u16(eth_addr: EthernetAddress) -> u16 {
+                    let mut sum: u16 = 0;
+                    for byte in eth_addr.as_bytes().iter() {
+                        sum = sum.wrapping_add(*byte as u16);
+                    }
+                    sum
+                }
+                fn ipv4_addr_as_u16(ipv4_addr: Ipv4Address) -> u16 {
+                    let mut sum: u16 = 0;
+                    for byte in ipv4_addr.as_bytes().iter() {
+                        sum = sum.wrapping_add(*byte as u16);
+                    }
+                    sum
+                }
+
+                // add mac and ip addresses
+                /*
+                 *if let Some(mac) = parse_res.mac_src {
+                 *    color = color.wrapping_add(eth_addr_as_u16(mac));
+                 *}
+                 *if let Some(mac) = parse_res.mac_dst {
+                 *    color = color.wrapping_add(eth_addr_as_u16(mac));
+                 *}
+                 *if let Some(ip) = parse_res.ipv4_src {
+                 *    color = color.wrapping_add(ipv4_addr_as_u16(ip));
+                 *}
+                 *if let Some(ip) = parse_res.ipv4_src {
+                 *    color = color.wrapping_add(ipv4_addr_as_u16(ip));
+                 *}
+                 */
+
+                Graphics::draw_square_filled(&mut graphics.lcd, x, y, square_len, color);
+                x = x + square_len;
+                //println!("I'll draw at ({},{}) with {}", x, y, color);
+                if x+square_len >= 480 {
+                    x = 0;
+                    y = y + square_len;
+                    if y+square_len >= 272 {
+                        y = 0;
+                    }
+                }
+
+            } else {
+                match res.unwrap_err() {
                     stm32f7::ethernet::Error::Exhausted => {}
                     e => {println!("err {:?}", e);}
                 }
@@ -216,6 +280,7 @@ fn main(hw: board::Hardware) -> ! {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseResultType {
     Unknown,
     ARP,
@@ -225,11 +290,13 @@ pub enum ParseResultType {
     HTTP
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseResultDirection {
     Request,
     Response
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseResult {
     mac_src: Option<EthernetAddress>,
     mac_dst: Option<EthernetAddress>,
@@ -263,7 +330,7 @@ pub fn packets(data: &[u8], ipv4_addr: &mut Option<Ipv4Address>, requested_ipv4_
                     Ipv4Kind::Udp(UdpPacket {header: ref udp_header, payload: ref udp_payload}) => {
                         parse_result.port_src = Some(udp_header.src_port);
                         parse_result.port_dst = Some(udp_header.dst_port);
-                        
+
                         match *udp_payload {
                             UdpKind::Dhcp(DhcpPacket {mac, operation, .. }) => {
 
