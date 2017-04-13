@@ -2,6 +2,7 @@
 name = "dr3th3rn3t"
 version = "0.1.0"
 authors = ["Benjamin Lipp and Julian Herr"]
+license = "MIT/Apache-2.0"
 
 [dependencies]
 cortex-m = "0.1.4"
