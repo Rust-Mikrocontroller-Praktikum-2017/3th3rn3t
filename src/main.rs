@@ -15,6 +15,7 @@ extern crate alloc;
 #[macro_use]
 extern crate net;
 
+#[macro_use]
 use stm32f7::{random, audio, ethernet, sdram, system_clock, board, embedded, touch, i2c, lcd};
 
 #[macro_use]
@@ -68,15 +69,13 @@ pub unsafe extern "C" fn reset() -> ! {
 
     stm32f7::heap::init();
 
-    unsafe {
-        let scb = stm32f7::cortex_m::peripheral::scb_mut();
-        scb.cpacr.modify(|v| v | 0b1111 << 20);
-    }
+    let scb = stm32f7::cortex_m::peripheral::scb_mut();
+    scb.cpacr.modify(|v| v | 0b1111 << 20);
 
     main(board::hw());
 }
 
-
+#[inline(never)]
 fn main(hw: board::Hardware) -> ! {
 
     use embedded::interfaces::gpio::{self,Gpio};
@@ -156,26 +155,29 @@ fn main(hw: board::Hardware) -> ! {
         .expect("led pin already in use");
 
 
-    let mut eth_device = ethernet::EthernetDevice::new(Default::default(),
-                                                       Default::default(),
-                                                       rcc,
-                                                       syscfg,
-                                                       &mut gpio,
-                                                       ethernet_mac,
-                                                       ethernet_dma);
+    let mut eth_device = ethernet::EthernetDevice::new(
+        Default::default(),
+        Default::default(),
+        rcc,
+        syscfg,
+        &mut gpio,
+        ethernet_mac,
+        ethernet_dma
+        );
+
     if let Err(e) = eth_device {
         println!("ethernet init failed: {:?}", e);
     } else {
         println!("ethernet init successful");
     }
 
-    //let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
+    let mut random_gen = random::Rng::init(rng, rcc).expect("rng already enabled");
 
     let mut last_toggle_ticks = system_clock::ticks();
 
     graphics.prepare();
 
-    //let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
+    let mut snd = sound::Sound::init(sai_2, &mut i2c_3, rcc, &mut gpio);
 
     loop {
 
